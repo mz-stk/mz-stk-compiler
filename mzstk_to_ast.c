@@ -24,6 +24,13 @@ typedef enum {
     NODE_ENDFOR,  
     NODE_STARTFUNCTION,
     NODE_ENDFUNCTION, 
+    NODE_EQUAL,
+    NODE_NOT_EQUAL,
+    NODE_LESS,
+    NODE_GREATER, 
+    NODE_LESS_EQUAL,
+    NODE_GREATER_EQUAL,
+    NODE_START,
     NODE_EXIT,
 } NodeType;
 
@@ -51,6 +58,12 @@ typedef enum {
     TOKEN_ENDFOR,
     TOKEN_STARTFUNCTION, 
     TOKEN_ENDFUNCTION, 
+    TOKEN_EQUAL,
+    TOKEN_NOT_EQUAL,
+    TOKEN_LESS,
+    TOKEN_GREATER,
+    TOKEN_LESS_EQUAL,
+    TOKEN_GREATER_EQUAL,
     TOKEN_START,
     TOKEN_EXIT,
     TOKEN_EOF
@@ -62,12 +75,18 @@ typedef struct {
 } Token;
 
 Token* lex(const char* input, int* token_count) {
-    Token * tokens = malloc(strlen(input) * sizeof(Token));
+    size_t input_len = strlen(input);
+    Token* tokens = malloc((input_len + 1) * sizeof(Token));
+    if (!tokens) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(1);
+    }
     *token_count = 0;
 
-    for (int i = 0; input[i] != '\0'; i++) { 
+    for (size_t i = 0; input[i] != '\0'; i++) { 
         char c = input[i];
         Token token;
+        token.value = 0; 
 
         if (isspace(c)) continue;
         
@@ -95,6 +114,32 @@ Token* lex(const char* input, int* token_count) {
             case '/': token.type = TOKEN_DIVIDE; break;
             case '%': token.type = TOKEN_MODULO; break;
 
+            case '=':
+            case '!':
+                if (i+1 >= strlen(input)) {
+                    fprintf(stderr, "Unexpected end of input after '%c'\n", input[i]);
+                    free(tokens);
+                    exit(1);
+                }
+                if (input[i+1] == '=') {
+                    token.type = (c == '=') ? TOKEN_EQUAL : TOKEN_NOT_EQUAL;
+                    i++; 
+                } else {
+                    fprintf(stderr, "Invalid token: '%c' must be followed by '='\n", c);
+                    free(tokens);
+                    exit(1);
+                }
+                break;
+
+            case '<':
+            case '>':
+                token.type = (c == '<') ? TOKEN_LESS : TOKEN_GREATER;
+                if (i+1 < strlen(input) && input[i+1] == '=') {
+                    token.type = (c == '<') ? TOKEN_LESS_EQUAL : TOKEN_GREATER_EQUAL;
+                    i++; 
+                }
+                break;
+
             case '[': token.type = TOKEN_STARTIF; break;
             case ']': token.type = TOKEN_ENDIF; break;
             case '{': token.type = TOKEN_STARTWHILE; break;
@@ -103,19 +148,21 @@ Token* lex(const char* input, int* token_count) {
             case ')': token.type = TOKEN_ENDFOR; break;
 
             case '@': token.type = TOKEN_STARTFUNCTION; break;
-            case '!': token.type = TOKEN_ENDFUNCTION; break;
+            case '$': token.type = TOKEN_ENDFUNCTION; break;
 
             case ':':
-                if (!isalpha(input[i + 1])) {
+                if (i + 1 >= input_len || !isalpha(input[i + 1])) {
                     fprintf(stderr, "Invalid variable name after ':'\n");
+                    free(tokens);
                     exit(1);
                 }
                 token.type = TOKEN_STORE;
                 token.value = input[++i];
                 break;
             case ';':
-                if (!isalpha(input[i + 1])) {
+                if (i + 1 >= input_len || !isalpha(input[i + 1])) {
                     fprintf(stderr, "Invalid variable name after ';'\n");
+                    free(tokens);
                     exit(1);
                 }
                 token.type = TOKEN_LOAD;
@@ -127,14 +174,29 @@ Token* lex(const char* input, int* token_count) {
 
             default:
                 fprintf(stderr, "Unknown token: '%c' (ASCII %d)\n", c, c);
+                free(tokens);
                 exit(1);
         }
         
         tokens[(*token_count)++] = token;
     }
 
-    tokens[*token_count].type = TOKEN_EOF;
+    Token eof_token = {TOKEN_EOF, 0};
+    tokens[(*token_count)++] = eof_token;
     return tokens;
+}
+
+ASTNode* create_node(NodeType type, int value) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    if (!node) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(1);
+    }
+    node->type = type;
+    node->value = value;
+    node->children = NULL;
+    node->child_count = 0;
+    return node;
 }
 
 ASTNode* parse(Token* tokens, int token_count) {
@@ -142,15 +204,25 @@ ASTNode* parse(Token* tokens, int token_count) {
         fprintf(stderr, "Error: Program must start with 'S'\n");
         exit(1);
     }
-    if (tokens[token_count-1].type != TOKEN_EXIT) {
+    
+    bool has_exit = false;
+    for (int i = 0; i < token_count; i++) {
+        if (tokens[i].type == TOKEN_EXIT) {
+            has_exit = true;
+            break;
+        }
+    }
+    if (!has_exit) {
         fprintf(stderr, "Error: Program must end with 'E'\n");
         exit(1);
     }
 
-    ASTNode* program = malloc(sizeof(ASTNode));
-    program->type = NODE_PROGRAM;
+    ASTNode* program = create_node(NODE_PROGRAM, 0);
     program->children = malloc(token_count * sizeof(ASTNode*));
-    program->child_count = 0;
+    if (!program->children) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(1);
+    }
 
     ASTNode* stack[MAX_STACK_DEPTH];
     int stack_ptr = 0;
@@ -160,23 +232,28 @@ ASTNode* parse(Token* tokens, int token_count) {
     int expected_end_ptr = 0;
     
     for (int i = 0; i < token_count; i++) {
-        ASTNode* node = malloc(sizeof(ASTNode));  
+        if (tokens[i].type == TOKEN_EOF) break; // Skip EOF token
+        
+        ASTNode* node = NULL;
+        
         switch (tokens[i].type) {
             case TOKEN_PUSH:
-                node->type = NODE_PUSH;
-                node->value = tokens[i].value;
+                node = create_node(NODE_PUSH, tokens[i].value);
                 break;
 
-            case TOKEN_ADD:      node->type = NODE_ADD; break;
-            case TOKEN_SUBTRACT: node->type = NODE_SUBTRACT; break;
-            case TOKEN_MULTIPLY: node->type = NODE_MULTIPLY; break;
-            case TOKEN_DIVIDE:   node->type = NODE_DIVIDE; break;
-            case TOKEN_MODULO:  node->type = NODE_MODULO; break;
+            case TOKEN_ADD:      node = create_node(NODE_ADD, 0); break;
+            case TOKEN_SUBTRACT: node = create_node(NODE_SUBTRACT, 0); break;
+            case TOKEN_MULTIPLY: node = create_node(NODE_MULTIPLY, 0); break;
+            case TOKEN_DIVIDE:   node = create_node(NODE_DIVIDE, 0); break;
+            case TOKEN_MODULO:   node = create_node(NODE_MODULO, 0); break;
 
             case TOKEN_STARTIF:
-                node->type = NODE_STARTIF;
-                node->children = malloc(2 * sizeof(ASTNode*));
-                node->child_count = 0; 
+                node = create_node(NODE_STARTIF, 0);
+                node->children = malloc(token_count * sizeof(ASTNode*));
+                if (!node->children) {
+                    fprintf(stderr, "Memory allocation failed\n");
+                    exit(1);
+                }
                 if (stack_ptr >= MAX_STACK_DEPTH) {
                     fprintf(stderr, "Stack overflow: too many nested blocks\n");
                     exit(1);
@@ -184,10 +261,14 @@ ASTNode* parse(Token* tokens, int token_count) {
                 stack[stack_ptr++] = node;
                 expected_end[expected_end_ptr++] = TOKEN_ENDIF;
                 continue;
+                
             case TOKEN_STARTWHILE:
-                node->type = NODE_STARTWHILE;
-                node->children = malloc(2 * sizeof(ASTNode*));
-                node->child_count = 0; 
+                node = create_node(NODE_STARTWHILE, 0);
+                node->children = malloc(token_count * sizeof(ASTNode*));
+                if (!node->children) {
+                    fprintf(stderr, "Memory allocation failed\n");
+                    exit(1);
+                }
                 if (stack_ptr >= MAX_STACK_DEPTH) {
                     fprintf(stderr, "Stack overflow: too many nested blocks\n");
                     exit(1);
@@ -195,21 +276,29 @@ ASTNode* parse(Token* tokens, int token_count) {
                 stack[stack_ptr++] = node;
                 expected_end[expected_end_ptr++] = TOKEN_ENDWHILE;
                 continue;
+                
             case TOKEN_STARTFOR:
-                node->type = NODE_STARTFOR;
-                node->children = malloc(4 * sizeof(ASTNode*));
-                node->child_count = 0; 
+                node = create_node(NODE_STARTFOR, 0);
+                node->children = malloc(token_count * sizeof(ASTNode*));
+                if (!node->children) {
+                    fprintf(stderr, "Memory allocation failed\n");
+                    exit(1);
+                }
                 if (stack_ptr >= MAX_STACK_DEPTH) {
                     fprintf(stderr, "Stack overflow: too many nested blocks\n");
                     exit(1);
-                } 
+                }
                 stack[stack_ptr++] = node;
                 expected_end[expected_end_ptr++] = TOKEN_ENDFOR;
                 continue;
+                
             case TOKEN_STARTFUNCTION:
-                node->type = NODE_STARTFUNCTION;
-                node->children = malloc(token_count * sizeof(ASTNode*)); 
-                node->child_count = 0; 
+                node = create_node(NODE_STARTFUNCTION, 0);
+                node->children = malloc(token_count * sizeof(ASTNode*));
+                if (!node->children) {
+                    fprintf(stderr, "Memory allocation failed\n");
+                    exit(1);
+                }
                 if (stack_ptr >= MAX_STACK_DEPTH) {
                     fprintf(stderr, "Stack overflow: too many nested blocks\n");
                     exit(1);
@@ -245,42 +334,32 @@ ASTNode* parse(Token* tokens, int token_count) {
                 ASTNode* block = stack[--stack_ptr];  
                 ASTNode* parent = stack[stack_ptr-1];
                 parent->children[parent->child_count++] = block;
-                free(node);
                 continue;
             }
 
             case TOKEN_STORE:
-                node->type = NODE_STORE;
-                node->value = tokens[i].value;  
+                node = create_node(NODE_STORE, tokens[i].value);
                 break;
             case TOKEN_LOAD:
-                node->type = NODE_LOAD;
-                node->value = tokens[i].value;  
+                node = create_node(NODE_LOAD, tokens[i].value);
                 break;
 
             case TOKEN_START: 
-                free(node); 
-                continue;  
-            case TOKEN_EXIT:  
-                node->type = NODE_EXIT; 
+                node = create_node(NODE_START, 0);
                 break;
-            case TOKEN_EOF: 
-                fprintf(stderr, "Unexpected EOF token\n"); 
-                exit(1);
+            case TOKEN_EXIT:  
+                node = create_node(NODE_EXIT, 0);
+                break;
 
             default:
                 fprintf(stderr, "Unexpected token in parser: %d\n", tokens[i].type);
                 exit(1);
         }
         
-        if (node->type != NODE_STARTIF && node->type != NODE_STARTWHILE && 
-            node->type != NODE_STARTFOR && node->type != NODE_STARTFUNCTION) {
-            node->children = NULL;
-            node->child_count = 0;
+        if (node) {
+            ASTNode* current = stack[stack_ptr-1];
+            current->children[current->child_count++] = node;
         }
-        
-        ASTNode* current = stack[stack_ptr-1];
-        current->children[current->child_count++] = node;
     }
     
     if (expected_end_ptr != 0) {
@@ -292,6 +371,8 @@ ASTNode* parse(Token* tokens, int token_count) {
 }
 
 void print_ast(ASTNode* node, int indent) {
+    if (!node) return;
+    
     const char* type_names[] = {
         "PROGRAM", 
         "PUSH", 
@@ -310,6 +391,13 @@ void print_ast(ASTNode* node, int indent) {
         "ENDFOR",  
         "STARTFUNCTION",
         "ENDFUNCTION", 
+        "EQUAL",
+        "NOT_EQUAL",
+        "LESS",
+        "GREATER",
+        "LESS_EQUAL",
+        "GREATER_EQUAL",
+        "START",
         "EXIT"
     };
 
@@ -326,6 +414,19 @@ void print_ast(ASTNode* node, int indent) {
     for (int i = 0; i < node->child_count; i++) {
         print_ast(node->children[i], indent + 1);
     }
+}
+
+void free_ast(ASTNode* node) {
+    if (!node) return;
+    
+    for (int i = 0; i < node->child_count; i++) {
+        free_ast(node->children[i]);
+    }
+    
+    if (node->children) {
+        free(node->children);
+    }
+    free(node);
 }
 
 int main(int argc, char** argv) {
@@ -345,10 +446,18 @@ int main(int argc, char** argv) {
         perror("Failed to open file");
         return 1;
     }
+    
     fseek(file, 0, SEEK_END);
     long length = ftell(file);
     fseek(file, 0, SEEK_SET);
+    
     char* input = malloc(length + 1);
+    if (!input) {
+        fprintf(stderr, "Memory allocation failed\n");
+        fclose(file);
+        return 1;
+    }
+    
     fread(input, 1, length, file);
     input[length] = '\0';
     fclose(file);
@@ -358,8 +467,9 @@ int main(int argc, char** argv) {
     ASTNode* ast = parse(tokens, token_count);
     print_ast(ast, 0);
 
-    free(input);
+    free_ast(ast);
     free(tokens);
+    free(input);
 
     return 0;
 }
