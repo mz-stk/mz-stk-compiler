@@ -30,6 +30,9 @@ typedef enum {
     NODE_GREATER, 
     NODE_LESS_EQUAL,
     NODE_GREATER_EQUAL,
+    NODE_AND, 
+    NODE_OR, 
+    NODE_NOT,
     NODE_START,
     NODE_EXIT,
 } NodeType;
@@ -64,6 +67,9 @@ typedef enum {
     TOKEN_GREATER,
     TOKEN_LESS_EQUAL,
     TOKEN_GREATER_EQUAL,
+    TOKEN_AND, 
+    TOKEN_OR, 
+    TOKEN_NOT,
     TOKEN_START,
     TOKEN_EXIT,
     TOKEN_EOF
@@ -114,6 +120,40 @@ Token* lex(const char* input, int* token_count) {
             case '/': token.type = TOKEN_DIVIDE; break;
             case '%': token.type = TOKEN_MODULO; break;
 
+            case '&':
+                if (i+1 >= strlen(input)) {
+                    fprintf(stderr, "Unexpected end of input after '%c'\n", input[i]);
+                    free(tokens);
+                    exit(1);
+                }
+
+                if (input[i+1] == '&') {
+                    token.type = TOKEN_AND;
+                    i++;
+                } else {
+                    fprintf(stderr, "Invalid token: '&' must be followed by '&'\n");
+                    free(tokens);
+                    exit(1);
+                } 
+                break;
+
+            case '|':
+                if (i+1 >= strlen(input)) {
+                    fprintf(stderr, "Unexpected end of input after '%c'\n", input[i]);
+                    free(tokens);
+                    exit(1);
+                }
+
+                if (input[i+1] == '|') {
+                    token.type = TOKEN_OR;
+                    i++;
+                } else {
+                    fprintf(stderr, "Invalid token: '|' must be followed by '|'\n");
+                    free(tokens);
+                    exit(1);
+                }
+                break;
+
             case '=':
             case '!':
                 if (i+1 >= strlen(input)) {
@@ -124,6 +164,8 @@ Token* lex(const char* input, int* token_count) {
                 if (input[i+1] == '=') {
                     token.type = (c == '=') ? TOKEN_EQUAL : TOKEN_NOT_EQUAL;
                     i++; 
+                } else if (c == '!') { 
+                    token.type = TOKEN_NOT;
                 } else {
                     fprintf(stderr, "Invalid token: '%c' must be followed by '='\n", c);
                     free(tokens);
@@ -232,7 +274,7 @@ ASTNode* parse(Token* tokens, int token_count) {
     int expected_end_ptr = 0;
     
     for (int i = 0; i < token_count; i++) {
-        if (tokens[i].type == TOKEN_EOF) break; // Skip EOF token
+        if (tokens[i].type == TOKEN_EOF) break; 
         
         ASTNode* node = NULL;
         
@@ -241,11 +283,22 @@ ASTNode* parse(Token* tokens, int token_count) {
                 node = create_node(NODE_PUSH, tokens[i].value);
                 break;
 
-            case TOKEN_ADD:      node = create_node(NODE_ADD, 0); break;
+            case TOKEN_ADD: node = create_node(NODE_ADD, 0); break;
             case TOKEN_SUBTRACT: node = create_node(NODE_SUBTRACT, 0); break;
             case TOKEN_MULTIPLY: node = create_node(NODE_MULTIPLY, 0); break;
-            case TOKEN_DIVIDE:   node = create_node(NODE_DIVIDE, 0); break;
-            case TOKEN_MODULO:   node = create_node(NODE_MODULO, 0); break;
+            case TOKEN_DIVIDE: node = create_node(NODE_DIVIDE, 0); break;
+            case TOKEN_MODULO: node = create_node(NODE_MODULO, 0); break;
+
+            case TOKEN_AND: node = create_node(NODE_AND, 0); break;             
+            case TOKEN_OR: node = create_node(NODE_OR, 0); break;
+            case TOKEN_NOT: node = create_node(NODE_NOT, 0); break;
+
+            case TOKEN_EQUAL: node = create_node(NODE_EQUAL, 0); break;
+            case TOKEN_NOT_EQUAL: node = create_node(NODE_NOT_EQUAL, 0); break;
+            case TOKEN_LESS: node = create_node(NODE_LESS, 0); break;
+            case TOKEN_GREATER: node = create_node(NODE_GREATER, 0); break;
+            case TOKEN_LESS_EQUAL: node = create_node(NODE_LESS_EQUAL, 0); break;
+            case TOKEN_GREATER_EQUAL: node = create_node(NODE_GREATER_EQUAL, 0); break;
 
             case TOKEN_STARTIF:
                 node = create_node(NODE_STARTIF, 0);
@@ -372,7 +425,7 @@ ASTNode* parse(Token* tokens, int token_count) {
 
 void print_ast(ASTNode* node, int indent) {
     if (!node) return;
-    
+
     const char* type_names[] = {
         "PROGRAM", 
         "PUSH", 
@@ -397,6 +450,9 @@ void print_ast(ASTNode* node, int indent) {
         "GREATER",
         "LESS_EQUAL",
         "GREATER_EQUAL",
+        "AND",
+        "OR",
+        "NOT",
         "START",
         "EXIT"
     };
