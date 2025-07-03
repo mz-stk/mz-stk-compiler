@@ -14,6 +14,8 @@ typedef enum {
     NODE_MULTIPLY,
     NODE_DIVIDE,
     NODE_MODULO, 
+    NODE_INPUT, 
+    NODE_PRINT,
     NODE_STORE,
     NODE_LOAD,
     NODE_STARTIF,
@@ -22,6 +24,9 @@ typedef enum {
     NODE_ENDWHILE,
     NODE_STARTFOR,
     NODE_ENDFOR,  
+    NODE_CONDITION,
+    NODE_STATEMENTS,
+    NODE_ENDSTATEMENTS,
     NODE_STARTFUNCTION,
     NODE_ENDFUNCTION, 
     NODE_EQUAL,
@@ -42,6 +47,7 @@ typedef struct ASTNode {
     int value;
     struct ASTNode** children;
     int child_count;
+    struct ASTNode* condition;
 } ASTNode;
 
 typedef enum {
@@ -51,6 +57,8 @@ typedef enum {
     TOKEN_MULTIPLY,
     TOKEN_DIVIDE,
     TOKEN_MODULO,
+    TOKEN_INPUT,
+    TOKEN_PRINT, 
     TOKEN_STORE,
     TOKEN_LOAD,
     TOKEN_STARTIF,
@@ -59,6 +67,9 @@ typedef enum {
     TOKEN_ENDWHILE,
     TOKEN_STARTFOR,
     TOKEN_ENDFOR,
+    TOKEN_CONDITION, 
+    TOKEN_STATEMENTS,
+    TOKEN_ENDSTATEMENTS,
     TOKEN_STARTFUNCTION, 
     TOKEN_ENDFUNCTION, 
     TOKEN_EQUAL,
@@ -119,6 +130,9 @@ Token* lex(const char* input, int* token_count) {
             case '*': token.type = TOKEN_MULTIPLY; break;
             case '/': token.type = TOKEN_DIVIDE; break;
             case '%': token.type = TOKEN_MODULO; break;
+
+            case '^': token.type = TOKEN_INPUT; break;
+            case 'V': token.type = TOKEN_PRINT; break;
 
             case '&':
                 if (i+1 >= strlen(input)) {
@@ -188,6 +202,9 @@ Token* lex(const char* input, int* token_count) {
             case '}': token.type = TOKEN_ENDWHILE; break;
             case '(': token.type = TOKEN_STARTFOR; break;
             case ')': token.type = TOKEN_ENDFOR; break;
+
+            case 'C': token.type = TOKEN_CONDITION; break;
+            case 'L': token.type = TOKEN_STATEMENTS; break; 
 
             case '@': token.type = TOKEN_STARTFUNCTION; break;
             case '$': token.type = TOKEN_ENDFUNCTION; break;
@@ -301,22 +318,20 @@ ASTNode* parse(Token* tokens, int token_count) {
             case TOKEN_GREATER_EQUAL: node = create_node(NODE_GREATER_EQUAL, 0); break;
 
             case TOKEN_STARTIF:
-                node = create_node(NODE_STARTIF, 0);
-                node->children = malloc(token_count * sizeof(ASTNode*));
-                if (!node->children) {
-                    fprintf(stderr, "Memory allocation failed\n");
-                    exit(1);
-                }
-                if (stack_ptr >= MAX_STACK_DEPTH) {
-                    fprintf(stderr, "Stack overflow: too many nested blocks\n");
-                    exit(1);
-                }
-                stack[stack_ptr++] = node;
-                expected_end[expected_end_ptr++] = TOKEN_ENDIF;
-                continue;
-                
             case TOKEN_STARTWHILE:
-                node = create_node(NODE_STARTWHILE, 0);
+            case TOKEN_CONDITION:
+            case TOKEN_STATEMENTS:
+                switch (tokens[i].type) {
+                  case TOKEN_STARTWHILE:  node = create_node(NODE_STARTWHILE, 0); break;
+                  case TOKEN_STARTFOR:    node = create_node(NODE_STARTFOR, 0);   break;
+                  case TOKEN_STARTIF:     node = create_node(NODE_STARTIF, 0);    break;
+                  case TOKEN_CONDITION:   node = create_node(NODE_CONDITION, 0);  break;
+                  case TOKEN_STATEMENTS:  node = create_node(NODE_STATEMENTS, 0); break;
+                  default:
+                      fprintf(stderr, "Unexpected token in parser: %d\n", tokens[i].type);
+                      exit(1);
+                }
+
                 node->children = malloc(token_count * sizeof(ASTNode*));
                 if (!node->children) {
                     fprintf(stderr, "Memory allocation failed\n");
@@ -327,22 +342,28 @@ ASTNode* parse(Token* tokens, int token_count) {
                     exit(1);
                 }
                 stack[stack_ptr++] = node;
-                expected_end[expected_end_ptr++] = TOKEN_ENDWHILE;
-                continue;
-                
-            case TOKEN_STARTFOR:
-                node = create_node(NODE_STARTFOR, 0);
-                node->children = malloc(token_count * sizeof(ASTNode*));
-                if (!node->children) {
-                    fprintf(stderr, "Memory allocation failed\n");
-                    exit(1);
+
+                switch(tokens[i].type) {
+                    case TOKEN_STARTWHILE:
+                        expected_end[expected_end_ptr++] = TOKEN_ENDWHILE;
+                        break;
+                    case TOKEN_STARTFOR:
+                        expected_end[expected_end_ptr++] = TOKEN_ENDFOR;
+                        break;
+                    case TOKEN_STARTIF:
+                        expected_end[expected_end_ptr++] = TOKEN_ENDIF;
+                        break;
+                    case TOKEN_CONDITION:
+                        expected_end[expected_end_ptr++] = TOKEN_STATEMENTS;
+                        break;
+                    case TOKEN_STATEMENTS:
+                        expected_end[expected_end_ptr++] = TOKEN_ENDSTATEMENTS;
+                        break;
+                    default:
+                        fprintf(stderr, "Unexpected token in parser: %d\n", tokens[i].type);
+                        exit(1);
                 }
-                if (stack_ptr >= MAX_STACK_DEPTH) {
-                    fprintf(stderr, "Stack overflow: too many nested blocks\n");
-                    exit(1);
-                }
-                stack[stack_ptr++] = node;
-                expected_end[expected_end_ptr++] = TOKEN_ENDFOR;
+
                 continue;
                 
             case TOKEN_STARTFUNCTION:
@@ -370,10 +391,11 @@ ASTNode* parse(Token* tokens, int token_count) {
                 }
                 
                 TokenType expected = expected_end[expected_end_ptr-1];
-                if ((tokens[i].type == TOKEN_ENDIF && expected != TOKEN_ENDIF) ||
-                    (tokens[i].type == TOKEN_ENDWHILE && expected != TOKEN_ENDWHILE) ||
-                    (tokens[i].type == TOKEN_ENDFOR && expected != TOKEN_ENDFOR) ||
-                    (tokens[i].type == TOKEN_ENDFUNCTION && expected != TOKEN_ENDFUNCTION)) {
+                if (((tokens[i].type == TOKEN_ENDIF || tokens[i].type == TOKEN_ENDSTATEMENTS) && expected != TOKEN_ENDIF) ||
+                    ((tokens[i].type == TOKEN_ENDWHILE || tokens[i].type == TOKEN_ENDSTATEMENTS) && expected != TOKEN_ENDWHILE) ||
+                    ((tokens[i].type == TOKEN_ENDFOR || tokens[i].type == TOKEN_ENDSTATEMENTS) && expected != TOKEN_ENDFOR) ||
+                    (tokens[i].type == TOKEN_ENDFUNCTION && expected != TOKEN_ENDFUNCTION) ||
+                    (tokens[i].type == TOKEN_CONDITION && expected != TOKEN_STATEMENTS)) {
                     fprintf(stderr, "Mismatched block ending at position %d\n", i);
                     exit(1);
                 }
