@@ -206,7 +206,22 @@ Token* lex(const char* input, int* token_count) {
             case 'C': token.type = TOKEN_CONDITION; break;
             case 'L': token.type = TOKEN_STATEMENTS; break; 
 
-            case '@': token.type = TOKEN_STARTFUNCTION; break;
+            case '@': 
+                if (i + 1 >= input_len || !isdigit(input[i + 1])) {
+                    fprintf(stderr, "Invalid function name after '@'\n");
+                    free(tokens);
+                    exit(1);
+                }
+                token.type = TOKEN_STARTFUNCTION; 
+                token.value = 0;
+                i++;
+                while (i < strlen(input) && isdigit(input[i])) {
+                    token.value = token.value * 10 + (input[i] - '0');
+                    i++;
+                }
+                i--;
+                break;
+        
             case '$': token.type = TOKEN_ENDFUNCTION; break;
 
             case ':':
@@ -317,6 +332,13 @@ ASTNode* parse(Token* tokens, int token_count) {
             case TOKEN_LESS_EQUAL: node = create_node(NODE_LESS_EQUAL, 0); break;
             case TOKEN_GREATER_EQUAL: node = create_node(NODE_GREATER_EQUAL, 0); break;
 
+            case TOKEN_INPUT:
+                node = create_node(NODE_INPUT, 0);
+                break;
+            case TOKEN_PRINT: 
+                node = create_node(NODE_PRINT, 0);
+                break;
+
             case TOKEN_STARTIF:
             case TOKEN_STARTWHILE:
             case TOKEN_CONDITION:
@@ -367,7 +389,7 @@ ASTNode* parse(Token* tokens, int token_count) {
                 continue;
                 
             case TOKEN_STARTFUNCTION:
-                node = create_node(NODE_STARTFUNCTION, 0);
+                node = create_node(NODE_STARTFUNCTION, tokens[i].value);
                 node->children = malloc(token_count * sizeof(ASTNode*));
                 if (!node->children) {
                     fprintf(stderr, "Memory allocation failed\n");
