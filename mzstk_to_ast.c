@@ -24,7 +24,9 @@ typedef enum {
     NODE_ENDWHILE,
     NODE_STARTFOR,
     NODE_ENDFOR,  
+    NODE_INIT
     NODE_CONDITION,
+    NODE_UPDATE,
     NODE_STATEMENTS,
     NODE_ENDSTATEMENTS,
     NODE_STARTFUNCTION,
@@ -67,7 +69,9 @@ typedef enum {
     TOKEN_ENDWHILE,
     TOKEN_STARTFOR,
     TOKEN_ENDFOR,
+    TOKEN_INIT,
     TOKEN_CONDITION, 
+    TOKEN_UPDATE,
     TOKEN_STATEMENTS,
     TOKEN_ENDSTATEMENTS,
     TOKEN_STARTFUNCTION, 
@@ -203,7 +207,9 @@ Token* lex(const char* input, int* token_count) {
             case '(': token.type = TOKEN_STARTFOR; break;
             case ')': token.type = TOKEN_ENDFOR; break;
 
+            case 'I': token.type = TOKEN_INIT; break;
             case 'C': token.type = TOKEN_CONDITION; break;
+            case 'U': token.type = TOKEN_UPDATE; break;
             case 'L': token.type = TOKEN_STATEMENTS; break; 
 
             case '@': 
@@ -341,12 +347,19 @@ ASTNode* parse(Token* tokens, int token_count) {
 
             case TOKEN_STARTIF:
             case TOKEN_STARTWHILE:
+            case TOKEN_STARTFOR:
+            case TOKEN_STARTFUNCTION:
+            case TOKEN_INIT:
+            case TOKEN_UPDATE:
             case TOKEN_CONDITION:
             case TOKEN_STATEMENTS:
                 switch (tokens[i].type) {
+                  case TOKEN_STARTIF:     node = create_node(NODE_STARTIF, 0);    break;
                   case TOKEN_STARTWHILE:  node = create_node(NODE_STARTWHILE, 0); break;
                   case TOKEN_STARTFOR:    node = create_node(NODE_STARTFOR, 0);   break;
-                  case TOKEN_STARTIF:     node = create_node(NODE_STARTIF, 0);    break;
+                  case TOKEN_STARTFUNCTION: node = create_node(NODE_STARTFUNCTION, tokens[i].value); break;
+                  case TOKEN_INIT: node = create_node(NODE_INIT, 0); break;
+                  case TOKEN_UPDATE: node = create_node(NODE_UPDATE, 0); break;
                   case TOKEN_CONDITION:   node = create_node(NODE_CONDITION, 0);  break;
                   case TOKEN_STATEMENTS:  node = create_node(NODE_STATEMENTS, 0); break;
                   default:
@@ -366,14 +379,23 @@ ASTNode* parse(Token* tokens, int token_count) {
                 stack[stack_ptr++] = node;
 
                 switch(tokens[i].type) {
+                    case TOKEN_STARTIF:
+                        expected_end[expected_end_ptr++] = TOKEN_ENDIF;
+                        break;
                     case TOKEN_STARTWHILE:
                         expected_end[expected_end_ptr++] = TOKEN_ENDWHILE;
                         break;
                     case TOKEN_STARTFOR:
                         expected_end[expected_end_ptr++] = TOKEN_ENDFOR;
                         break;
-                    case TOKEN_STARTIF:
-                        expected_end[expected_end_ptr++] = TOKEN_ENDIF;
+                    case TOKEN_STARTFUNCTION: 
+                        expected_end[expected_end_ptr++] = TOKEN_ENDFUNCTION;
+                        break;
+                    case TOKEN_INIT:
+                        expected_end[expected_end_ptr++] = TOKEN_UPDATE;
+                        break;
+                    case TOKEN_UPDATE:
+                        expected_end[expected_end_ptr++] = TO_KEN_CONDITION;
                         break;
                     case TOKEN_CONDITION:
                         expected_end[expected_end_ptr++] = TOKEN_STATEMENTS;
@@ -387,38 +409,25 @@ ASTNode* parse(Token* tokens, int token_count) {
                 }
 
                 continue;
-                
-            case TOKEN_STARTFUNCTION:
-                node = create_node(NODE_STARTFUNCTION, tokens[i].value);
-                node->children = malloc(token_count * sizeof(ASTNode*));
-                if (!node->children) {
-                    fprintf(stderr, "Memory allocation failed\n");
-                    exit(1);
-                }
-                if (stack_ptr >= MAX_STACK_DEPTH) {
-                    fprintf(stderr, "Stack overflow: too many nested blocks\n");
-                    exit(1);
-                }
-                stack[stack_ptr++] = node;
-                expected_end[expected_end_ptr++] = TOKEN_ENDFUNCTION;
-                continue;
-            
+
             case TOKEN_ENDIF:
             case TOKEN_ENDWHILE:
             case TOKEN_ENDFOR:
-            case TOKEN_ENDFUNCTION: {
+            case TOKEN_ENDFUNCTION:
+            case TOKEN_ENDSTATEMENTS:
+            case TOKEN_CONDITION:
+            case TOKEN_UPDATE:
+            case TOKEN_STATEMENTS: {
                 if (expected_end_ptr == 0) {
                     fprintf(stderr, "Unexpected end block at position %d\n", i);
                     exit(1);
                 }
                 
                 TokenType expected = expected_end[expected_end_ptr-1];
-                if (((tokens[i].type == TOKEN_ENDIF || tokens[i].type == TOKEN_ENDSTATEMENTS) && expected != TOKEN_ENDIF) ||
-                    ((tokens[i].type == TOKEN_ENDWHILE || tokens[i].type == TOKEN_ENDSTATEMENTS) && expected != TOKEN_ENDWHILE) ||
-                    ((tokens[i].type == TOKEN_ENDFOR || tokens[i].type == TOKEN_ENDSTATEMENTS) && expected != TOKEN_ENDFOR) ||
-                    (tokens[i].type == TOKEN_ENDFUNCTION && expected != TOKEN_ENDFUNCTION) ||
-                    (tokens[i].type == TOKEN_CONDITION && expected != TOKEN_STATEMENTS)) {
-                    fprintf(stderr, "Mismatched block ending at position %d\n", i);
+                
+                if (tokens[i].type != expected) {
+                    fprintf(stderr, "Mismatched block ending at position %d: expected %d, got %d\n", 
+                            i, expected, tokens[i].type);
                     exit(1);
                 }
                 
@@ -431,6 +440,54 @@ ASTNode* parse(Token* tokens, int token_count) {
                 ASTNode* block = stack[--stack_ptr];  
                 ASTNode* parent = stack[stack_ptr-1];
                 parent->children[parent->child_count++] = block;
+                
+                if (tokens[i].type == TOKEN_CONDITION || 
+                    tokens[i].type == TOKEN_UPDATE || 
+                    tokens[i].type == TOKEN_STATEMENTS) {
+                    
+                    ASTNode* transition_node = NULL;
+                    switch (tokens[i].type) {
+                        case TOKEN_CONDITION:
+                            transition_node = create_node(NODE_CONDITION, 0);
+                            break;
+                        case TOKEN_UPDATE:
+                            transition_node = create_node(NODE_UPDATE, 0);
+                            break;
+                        case TOKEN_STATEMENTS:
+                            transition_node = create_node(NODE_STATEMENTS, 0);
+                            break;
+                        default:
+                            break;
+                    }
+                    
+                    if (transition_node) {
+                        transition_node->children = malloc(token_count * sizeof(ASTNode*));
+                        if (!transition_node->children) {
+                            fprintf(stderr, "Memory allocation failed\n");
+                            exit(1);
+                        }
+                        
+                        if (stack_ptr >= MAX_STACK_DEPTH) {
+                            fprintf(stderr, "Stack overflow: too many nested blocks\n");
+                            exit(1);
+                        }
+                        stack[stack_ptr++] = transition_node;
+                        
+                        switch (tokens[i].type) {
+                            case TOKEN_CONDITION:
+                                expected_end[expected_end_ptr++] = TOKEN_STATEMENTS;
+                                break;
+                            case TOKEN_UPDATE:
+                                expected_end[expected_end_ptr++] = TOKEN_CONDITION;
+                                break;
+                            case TOKEN_STATEMENTS:
+                                expected_end[expected_end_ptr++] = TOKEN_ENDSTATEMENTS;
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                }
                 continue;
             }
 
