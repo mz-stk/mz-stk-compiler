@@ -24,7 +24,7 @@ typedef enum {
     NODE_ENDWHILE,
     NODE_STARTFOR,
     NODE_ENDFOR,  
-    NODE_INIT
+    NODE_INIT,
     NODE_CONDITION,
     NODE_UPDATE,
     NODE_STATEMENTS,
@@ -395,7 +395,7 @@ ASTNode* parse(Token* tokens, int token_count) {
                         expected_end[expected_end_ptr++] = TOKEN_UPDATE;
                         break;
                     case TOKEN_UPDATE:
-                        expected_end[expected_end_ptr++] = TO_KEN_CONDITION;
+                        expected_end[expected_end_ptr++] = TOKEN_CONDITION;
                         break;
                     case TOKEN_CONDITION:
                         expected_end[expected_end_ptr++] = TOKEN_STATEMENTS;
@@ -408,16 +408,46 @@ ASTNode* parse(Token* tokens, int token_count) {
                         exit(1);
                 }
 
+                switch(tokens[i].type) {
+                    case TOKEN_CONDITION:
+                    case TOKEN_UPDATE:
+                    case TOKEN_STATEMENTS:
+                        if (expected_end_ptr == 0) {
+                            fprintf(stderr, "Unexpected end block at position %d\n", i);
+                            exit(1);
+                        }
+                        
+                        TokenType expected = expected_end[expected_end_ptr-1];
+                        
+                        if (tokens[i].type != expected) {
+                            fprintf(stderr, "Mismatched block ending at position %d: expected %d, got %d\n", 
+                                    i, expected, tokens[i].type);
+                            exit(1);
+                        }
+                        
+                        expected_end_ptr--;
+
+                        if (stack_ptr <= 1) {
+                            fprintf(stderr, "Unexpected end block\n");
+                            exit(1);
+                        }
+                        ASTNode* block = stack[--stack_ptr];  
+                        ASTNode* parent = stack[stack_ptr-1];
+                        parent->children[parent->child_count++] = block;
+                        continue;
+                    default:
+                        fprintf(stderr, "Unexpected token in parser: %d\n", tokens[i].type);
+                        exit(1);
+                }
+                
                 continue;
+
 
             case TOKEN_ENDIF:
             case TOKEN_ENDWHILE:
             case TOKEN_ENDFOR:
             case TOKEN_ENDFUNCTION:
-            case TOKEN_ENDSTATEMENTS:
-            case TOKEN_CONDITION:
-            case TOKEN_UPDATE:
-            case TOKEN_STATEMENTS: {
+            case TOKEN_ENDSTATEMENTS: {
                 if (expected_end_ptr == 0) {
                     fprintf(stderr, "Unexpected end block at position %d\n", i);
                     exit(1);
@@ -441,53 +471,6 @@ ASTNode* parse(Token* tokens, int token_count) {
                 ASTNode* parent = stack[stack_ptr-1];
                 parent->children[parent->child_count++] = block;
                 
-                if (tokens[i].type == TOKEN_CONDITION || 
-                    tokens[i].type == TOKEN_UPDATE || 
-                    tokens[i].type == TOKEN_STATEMENTS) {
-                    
-                    ASTNode* transition_node = NULL;
-                    switch (tokens[i].type) {
-                        case TOKEN_CONDITION:
-                            transition_node = create_node(NODE_CONDITION, 0);
-                            break;
-                        case TOKEN_UPDATE:
-                            transition_node = create_node(NODE_UPDATE, 0);
-                            break;
-                        case TOKEN_STATEMENTS:
-                            transition_node = create_node(NODE_STATEMENTS, 0);
-                            break;
-                        default:
-                            break;
-                    }
-                    
-                    if (transition_node) {
-                        transition_node->children = malloc(token_count * sizeof(ASTNode*));
-                        if (!transition_node->children) {
-                            fprintf(stderr, "Memory allocation failed\n");
-                            exit(1);
-                        }
-                        
-                        if (stack_ptr >= MAX_STACK_DEPTH) {
-                            fprintf(stderr, "Stack overflow: too many nested blocks\n");
-                            exit(1);
-                        }
-                        stack[stack_ptr++] = transition_node;
-                        
-                        switch (tokens[i].type) {
-                            case TOKEN_CONDITION:
-                                expected_end[expected_end_ptr++] = TOKEN_STATEMENTS;
-                                break;
-                            case TOKEN_UPDATE:
-                                expected_end[expected_end_ptr++] = TOKEN_CONDITION;
-                                break;
-                            case TOKEN_STATEMENTS:
-                                expected_end[expected_end_ptr++] = TOKEN_ENDSTATEMENTS;
-                                break;
-                            default:
-                                break;
-                        }
-                    }
-                }
                 continue;
             }
 
@@ -535,6 +518,8 @@ void print_ast(ASTNode* node, int indent) {
         "MULTIPLY",
         "DIVIDE",
         "MODULO", 
+        "INPUT",
+        "PRINT",
         "STORE",
         "LOAD",
         "STARTIF",
@@ -543,6 +528,11 @@ void print_ast(ASTNode* node, int indent) {
         "ENDWHILE",
         "STARTFOR",
         "ENDFOR",  
+        "INIT",
+        "UPDATE",
+        "CONDITION",
+        "STATEMENTS",
+        "ENDSTATEMENTS",
         "STARTFUNCTION",
         "ENDFUNCTION", 
         "EQUAL",
