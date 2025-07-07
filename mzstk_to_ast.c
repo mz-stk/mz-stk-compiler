@@ -31,6 +31,7 @@ typedef enum {
     NODE_ENDSTATEMENTS,
     NODE_STARTFUNCTION,
     NODE_ENDFUNCTION, 
+    NODE_CALL,
     NODE_EQUAL,
     NODE_NOT_EQUAL,
     NODE_LESS,
@@ -76,6 +77,7 @@ typedef enum {
     TOKEN_ENDSTATEMENTS,
     TOKEN_STARTFUNCTION, 
     TOKEN_ENDFUNCTION, 
+    TOKEN_CALL,
     TOKEN_EQUAL,
     TOKEN_NOT_EQUAL,
     TOKEN_LESS,
@@ -182,6 +184,15 @@ Token* lex(const char* input, int* token_count) {
                 if (input[i+1] == '=') {
                     token.type = (c == '=') ? TOKEN_EQUAL : TOKEN_NOT_EQUAL;
                     i++; 
+                } else if (c == '!' && isdigit(input[i+1])) {
+                    token.type = TOKEN_CALL;
+                    token.value = 0;
+                    i++;
+                    while (i < strlen(input) && isdigit(input[i])) {
+                        token.value = token.value * 10 + (input[i] - '0');
+                        i++;
+                    }
+                    i--;
                 } else if (c == '!') { 
                     token.type = TOKEN_NOT;
                 } else {
@@ -211,6 +222,7 @@ Token* lex(const char* input, int* token_count) {
             case 'C': token.type = TOKEN_CONDITION; break;
             case 'U': token.type = TOKEN_UPDATE; break;
             case 'L': token.type = TOKEN_STATEMENTS; break; 
+            case 'X': token.type = TOKEN_ENDSTATEMENTS; break;
 
             case '@': 
                 if (i + 1 >= input_len || !isdigit(input[i + 1])) {
@@ -231,22 +243,34 @@ Token* lex(const char* input, int* token_count) {
             case '$': token.type = TOKEN_ENDFUNCTION; break;
 
             case ':':
-                if (i + 1 >= input_len || !isalpha(input[i + 1])) {
+                if (i + 1 >= input_len || !isdigit(input[i + 1])) {
                     fprintf(stderr, "Invalid variable name after ':'\n");
                     free(tokens);
                     exit(1);
                 }
-                token.type = TOKEN_STORE;
-                token.value = input[++i];
+                token.type = TOKEN_STORE; 
+                token.value = 0;
+                i++;
+                while (i < strlen(input) && isdigit(input[i])) {
+                    token.value = token.value * 10 + (input[i] - '0');
+                    i++;
+                }
+                i--;
                 break;
             case ';':
-                if (i + 1 >= input_len || !isalpha(input[i + 1])) {
+                if (i + 1 >= input_len || !isdigit(input[i + 1])) {
                     fprintf(stderr, "Invalid variable name after ';'\n");
                     free(tokens);
                     exit(1);
                 }
                 token.type = TOKEN_LOAD;
-                token.value = input[++i];
+                token.value = 0;
+                i++;
+                while (i < strlen(input) && isdigit(input[i])) {
+                    token.value = token.value * 10 + (input[i] - '0');
+                    i++;
+                }
+                i--;
                 break;
 
             case 'S': token.type = TOKEN_START; break;
@@ -344,6 +368,9 @@ ASTNode* parse(Token* tokens, int token_count) {
             case TOKEN_PRINT: 
                 node = create_node(NODE_PRINT, 0);
                 break;
+            case TOKEN_CALL: 
+                node = create_node(NODE_CALL, tokens[i].value);
+                break;
 
             case TOKEN_STARTIF:
             case TOKEN_STARTWHILE:
@@ -409,39 +436,25 @@ ASTNode* parse(Token* tokens, int token_count) {
                 }
 
                 switch(tokens[i].type) {
-                    case TOKEN_CONDITION:
                     case TOKEN_UPDATE:
+                    case TOKEN_CONDITION:
                     case TOKEN_STATEMENTS:
-                        if (expected_end_ptr == 0) {
-                            fprintf(stderr, "Unexpected end block at position %d\n", i);
-                            exit(1);
+                        if (expected_end_ptr > 0 && expected_end[expected_end_ptr-1] == tokens[i].type) {
+                            expected_end_ptr--; 
+                            
+                            if (stack_ptr <= 1) {
+                                fprintf(stderr, "Unexpected end block\n");
+                                exit(1);
+                            }
+                            ASTNode* prev_block = stack[--stack_ptr];  
+                            ASTNode* parent = stack[stack_ptr-1];
+                            parent->children[parent->child_count++] = prev_block;
                         }
-                        
-                        TokenType expected = expected_end[expected_end_ptr-1];
-                        
-                        if (tokens[i].type != expected) {
-                            fprintf(stderr, "Mismatched block ending at position %d: expected %d, got %d\n", 
-                                    i, expected, tokens[i].type);
-                            exit(1);
-                        }
-                        
-                        expected_end_ptr--;
-
-                        if (stack_ptr <= 1) {
-                            fprintf(stderr, "Unexpected end block\n");
-                            exit(1);
-                        }
-                        ASTNode* block = stack[--stack_ptr];  
-                        ASTNode* parent = stack[stack_ptr-1];
-                        parent->children[parent->child_count++] = block;
-                        continue;
+                        break;
                     default:
-                        fprintf(stderr, "Unexpected token in parser: %d\n", tokens[i].type);
-                        exit(1);
-                }
-                
+                        break;
+                }                
                 continue;
-
 
             case TOKEN_ENDIF:
             case TOKEN_ENDWHILE:
@@ -470,8 +483,16 @@ ASTNode* parse(Token* tokens, int token_count) {
                 ASTNode* block = stack[--stack_ptr];  
                 ASTNode* parent = stack[stack_ptr-1];
                 parent->children[parent->child_count++] = block;
-                
-                continue;
+
+              node = create_node(
+                    (tokens[i].type == TOKEN_ENDIF) ? NODE_ENDIF :
+                    (tokens[i].type == TOKEN_ENDWHILE) ? NODE_ENDWHILE :
+                    (tokens[i].type == TOKEN_ENDFOR) ? NODE_ENDFOR :
+                    (tokens[i].type == TOKEN_ENDFUNCTION) ? NODE_ENDFUNCTION :
+                    NODE_ENDSTATEMENTS, 0
+              );
+
+              break;
             }
 
             case TOKEN_STORE:
@@ -535,6 +556,7 @@ void print_ast(ASTNode* node, int indent) {
         "ENDSTATEMENTS",
         "STARTFUNCTION",
         "ENDFUNCTION", 
+        "CALL",
         "EQUAL",
         "NOT_EQUAL",
         "LESS",
@@ -551,11 +573,9 @@ void print_ast(ASTNode* node, int indent) {
     for (int i = 0; i < indent; i++) printf("  ");
     printf("%s", type_names[node->type]);
 
-    if (node->type == NODE_PUSH) {
+    if (node->type == NODE_PUSH || node->type == NODE_STORE || node->type == NODE_LOAD || node->type == NODE_CALL || node->type == NODE_STARTFUNCTION) {
         printf(" (%d)", node->value);
-    } else if (node->type == NODE_STORE || node->type == NODE_LOAD) {
-        printf(" (%c)", (char)node->value);
-    }
+    } 
     printf("\n");
 
     for (int i = 0; i < node->child_count; i++) {
