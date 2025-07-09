@@ -2,13 +2,17 @@
 #define HEADERS_H
 
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include <unistd.h>
+#include <libgen.h>
 
 #define MAX_STACK_DEPTH 100
+#define MAX_PATH_LEN 512
 #define STACK_SIZE 1000
 #define MEMORY_SIZE 1000
 
@@ -102,13 +106,5 @@ typedef struct {
     TokenType type;
     int value;
 } Token;
-
-typedef struct {
-    int stack[STACK_SIZE];
-    int sp;  
-    int memory[MEMORY_SIZE];  
-    ASTNode** functions;      
-    int function_count;
-} VM;
 
 #endif
