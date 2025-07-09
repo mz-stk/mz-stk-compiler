@@ -1,23 +1,24 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11 -g
-LDFLAGS = 
+CFLAGS = -Wall -Wextra -Iinclude
+SRC_DIR = src
+OBJ_DIR = obj
 
-TARGET = mzstk_to_ast
-SRC = mzstk_to_ast.c
-OBJ = $(SRC:.c=.o)
+SOURCES = $(wildcard $(SRC_DIR)/*.c)
+OBJECTS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SOURCES))
+EXECUTABLE = mzstk
 
-all: $(TARGET)
+all: $(EXECUTABLE)
 
-$(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+$(EXECUTABLE): $(OBJECTS)
+	$(CC) $(CFLAGS) $^ -o $@
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ_DIR):
+	mkdir -p $(OBJ_DIR)
 
 clean:
-	rm -f $(OBJ) $(TARGET)
+	rm -rf $(OBJ_DIR) $(EXECUTABLE)
 
-install: $(TARGET)
-	cp $(TARGET) /usr/local/bin/
-
-.PHONY: all clean test debug install
+.PHONY: all clean
