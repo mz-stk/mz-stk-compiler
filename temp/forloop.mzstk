@@ -1,0 +1,10 @@
+S
+(        # For loop
+  I 0 :0  # Init: store 0 in var0
+  C ;0 5 <  # Condition: while var0 < 5
+  U ;0 1 + :0  # Update: increment var0
+  L      # Statements
+    ;0 V  # Print var0 (0-4)
+  X
+)
+E

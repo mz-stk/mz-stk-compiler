@@ -1,0 +1,4 @@
+S
+10 :0    # Store 10 in variable 0
+;0 V     # Load variable 0 and print (10)
+E

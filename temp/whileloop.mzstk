@@ -1,0 +1,9 @@
+S
+5 :0     # Store 5 in variable 0
+{        # While loop
+  ;0 0 > [  # While var0 > 0
+    ;0 V    #   Print var0
+    ;0 1 - :0  # Decrement var0
+  ]
+}
+E

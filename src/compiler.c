@@ -1,5 +1,7 @@
 #include "../include/compiler.h"
 
+static int temp_counter = 0;
+
 void emit(FILE* out, const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
@@ -16,14 +18,25 @@ void compile(ASTNode* node, FILE* output, int indent) {
     switch (node->type) {
         case NODE_PROGRAM: 
             emit(output, "#include <stdio.h>");
+            emit(output, "#include <stdlib.h>");
             emit(output, "#include <stdbool.h>");
+            emit(output, "int stack[1024], sp = -1;");
             emit(output, "#define MEM_SIZE %d", MEMORY_SIZE);
             emit(output, "int memory[MEM_SIZE];");
+            
+            for (int i = 0; i < node->child_count; i++) {
+                if (node->children[i]->type == NODE_STARTFUNCTION) {
+                    compile(node->children[i], output, indent);
+                }
+            }
+            
             emit(output, "int main() {");
             for (int i = 0; i < node->child_count; i++) {
-                compile(node->children[i], output, indent+1);
+                if (node->children[i]->type != NODE_STARTFUNCTION) {
+                    compile(node->children[i], output, indent+1);
+                }
             }
-            emit(output, "return 0;");
+            emit(output, "    return 0;");
             emit(output, "}");
             break;
 
@@ -116,21 +129,39 @@ void compile(ASTNode* node, FILE* output, int indent) {
 
         case NODE_STARTWHILE: {
             INDENT; emit(output, "while (1) {");
-            compile(node->children[0], output, indent+1); 
+            
+            compile(node->children[0], output, indent+1);
+            
             INDENT; emit(output, "    if (!stack[sp--]) break;");
+            
             for (int i = 1; i < node->child_count; i++) {
                 compile(node->children[i], output, indent+1);
             }
+            
             INDENT; emit(output, "}");
             break;
         }
 
         case NODE_STARTFOR: {
-            compile(node->children[0], output, indent); 
+            if (node->child_count > 0) {
+                compile(node->children[0], output, indent);
+            }
+            
             INDENT; emit(output, "while (1) {");
-            compile(node->children[2], output, indent+1);
-            INDENT; emit(output, "    if (!stack[sp--]) break;");
-            compile(node->children[3], output, indent+1);                compile(node->children[1], output, indent+1); 
+            
+            if (node->child_count > 2) {
+                compile(node->children[2], output, indent+1);
+                INDENT; emit(output, "    if (!stack[sp--]) break;");
+            }
+            
+            if (node->child_count > 3) {
+                compile(node->children[3], output, indent+1);
+            }
+            
+            if (node->child_count > 1) {
+                compile(node->children[1], output, indent+1);
+            }
+            
             INDENT; emit(output, "}");
             break;
         }
@@ -144,23 +175,21 @@ void compile(ASTNode* node, FILE* output, int indent) {
             }
             break;
         
-
         case NODE_ENDIF:
         case NODE_ENDWHILE:
         case NODE_ENDFOR:
         case NODE_ENDFUNCTION:
         case NODE_ENDSTATEMENTS:
-            for (int i = 0; i < node->child_count; i++) {
-                compile(node->children[i], output, indent);
-            }
             break;
 
         case NODE_STARTFUNCTION: {
-            INDENT; emit(output, "void func_%d() {", node->value);
-            for (int i = 1; i < node->child_count; i++) {
+            emit(output, "void func_%d() {", node->value);
+            
+            for (int i = 0; i < node->child_count; i++) {
                 compile(node->children[i], output, indent+1);
             }
-            INDENT; emit(output, "}");
+            
+            emit(output, "}");
             break;
         }
 
@@ -170,50 +199,66 @@ void compile(ASTNode* node, FILE* output, int indent) {
         }
         
         case NODE_EQUAL: {
-            INDENT; emit(output, "stack[sp-1] = (stack[sp-1] == stack[sp]);");
-            INDENT; emit(output, "sp--;");
+            int current_temp = temp_counter++;
+            INDENT; emit(output, "int temp%d = (stack[sp-1] == stack[sp]);", current_temp);
+            INDENT; emit(output, "sp -= 2;");
+            INDENT; emit(output, "stack[++sp] = temp%d;", current_temp);
             break;
         }
         
         case NODE_NOT_EQUAL: {
-            INDENT; emit(output, "stack[sp-1] = (stack[sp-1] != stack[sp]);");
-            INDENT; emit(output, "sp--;");
+            int current_temp = temp_counter++;
+            INDENT; emit(output, "int temp%d = (stack[sp-1] != stack[sp]);", current_temp);
+            INDENT; emit(output, "sp -= 2;");
+            INDENT; emit(output, "stack[++sp] = temp%d;", current_temp);
             break;
         }
         
         case NODE_LESS: {
-            INDENT; emit(output, "stack[sp-1] = (stack[sp-1] < stack[sp]);");
-            INDENT; emit(output, "sp--;");
-            break;
-        }
-        
-        case NODE_GREATER:{
-            INDENT; emit(output, "stack[sp-1] = (stack[sp-1] > stack[sp]);");
-            INDENT; emit(output, "sp--;");
+            int current_temp = temp_counter++;
+            INDENT; emit(output, "int temp%d = (stack[sp-1] < stack[sp]);", current_temp);
+            INDENT; emit(output, "sp -= 2;");
+            INDENT; emit(output, "stack[++sp] = temp%d;", current_temp);
             break;
         }
 
+        case NODE_GREATER: {
+            int current_temp = temp_counter++;
+            INDENT; emit(output, "int temp%d = (stack[sp-1] > stack[sp]);", current_temp);
+            INDENT; emit(output, "sp -= 2;");
+            INDENT; emit(output, "stack[++sp] = temp%d;", current_temp);
+            break;
+        }
+        
         case NODE_LESS_EQUAL: {
-            INDENT; emit(output, "stack[sp-1] = (stack[sp-1] <= stack[sp]);");
-            INDENT; emit(output, "sp--;");
+            int current_temp = temp_counter++;
+            INDENT; emit(output, "int temp%d = (stack[sp-1] <= stack[sp]);", current_temp);
+            INDENT; emit(output, "sp -= 2;");
+            INDENT; emit(output, "stack[++sp] = temp%d;", current_temp);
             break;
         }
 
         case NODE_GREATER_EQUAL: {
-            INDENT; emit(output, "stack[sp-1] = (stack[sp-1] >= stack[sp]);");
-            INDENT; emit(output, "sp--;");
+            int current_temp = temp_counter++;
+            INDENT; emit(output, "int temp%d = (stack[sp-1] >= stack[sp]);", current_temp);
+            INDENT; emit(output, "sp -= 2;");
+            INDENT; emit(output, "stack[++sp] = temp%d;", current_temp);
             break;
         }
       
         case NODE_AND: {
-            INDENT; emit(output, "stack[sp-1] = (stack[sp-1] && stack[sp]);");
-            INDENT; emit(output, "sp--;");
+            int current_temp = temp_counter++;
+            INDENT; emit(output, "int temp%d = (stack[sp-1] && stack[sp]);", current_temp);
+            INDENT; emit(output, "sp -= 2;");
+            INDENT; emit(output, "stack[++sp] = temp%d;", current_temp);
             break;
         }
       
         case NODE_OR: {
-            INDENT; emit(output, "stack[sp-1] = (stack[sp-1] || stack[sp]);");
-            INDENT; emit(output, "sp--;");
+            int current_temp = temp_counter++;
+            INDENT; emit(output, "int temp%d = (stack[sp-1] || stack[sp]);", current_temp);
+            INDENT; emit(output, "sp -= 2;");
+            INDENT; emit(output, "stack[++sp] = temp%d;", current_temp);
             break;
         }
 
@@ -223,7 +268,7 @@ void compile(ASTNode* node, FILE* output, int indent) {
         }
 
         case NODE_EXIT:
-            INDENT; emit(output, "return 0;");
+            INDENT; emit(output, "exit(0);");
             break;
 
         default:
@@ -242,11 +287,6 @@ void execute(ASTNode* ast_root, FILE* output) {
         fprintf(stderr, "Invalid file pointer in execute()\n");
         return;
     }
-
-    emit(output, "#include <stdio.h>");
-    emit(output, "#include <stdlib.h>");
-    emit(output, "int stack[1024], sp = -1;");
-    emit(output, "int memory[%d];", MEMORY_SIZE);
     
     compile(ast_root, output, 0);
     

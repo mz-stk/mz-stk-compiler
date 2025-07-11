@@ -1,0 +1,4 @@
+S
+5 5 == V  # Print 1 (true) if 5 == 5
+3 5 < V  # Print 1 (true) if 3 < 5
+E
