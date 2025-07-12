@@ -40,7 +40,6 @@ ASTNode* parse(Token* tokens, int token_count) {
         switch (tokens[i].type) {
             case TOKEN_PUSH:
                 node = create_node(NODE_PUSH, tokens[i].value);
-                printf("Pushing value: %d\n", tokens[i].value);
                 break;
 
             case TOKEN_ADD: node = create_node(NODE_ADD, 0); break;
@@ -117,13 +116,13 @@ ASTNode* parse(Token* tokens, int token_count) {
                         expected_end[expected_end_ptr++] = TOKEN_ENDFUNCTION;
                         break;
                     case TOKEN_INIT:
-                        expected_end[expected_end_ptr++] = TOKEN_UPDATE;
+                        expected_end[expected_end_ptr++] = TOKEN_ENDINIT;
                         break;
                     case TOKEN_UPDATE:
-                        expected_end[expected_end_ptr++] = TOKEN_CONDITION;
+                        expected_end[expected_end_ptr++] = TOKEN_ENDUPDATE;
                         break;
                     case TOKEN_CONDITION:
-                        expected_end[expected_end_ptr++] = TOKEN_STATEMENTS;
+                        expected_end[expected_end_ptr++] = TOKEN_ENDCONDITION;
                         break;
                     case TOKEN_STATEMENTS:
                         expected_end[expected_end_ptr++] = TOKEN_ENDSTATEMENTS;
@@ -132,28 +131,11 @@ ASTNode* parse(Token* tokens, int token_count) {
                         fprintf(stderr, "Unexpected token in parser: %d\n", tokens[i].type);
                         exit(1);
                 }
-
-                switch(tokens[i].type) {
-                    case TOKEN_UPDATE:
-                    case TOKEN_CONDITION:
-                    case TOKEN_STATEMENTS:
-                        if (expected_end_ptr > 0 && expected_end[expected_end_ptr-1] == tokens[i].type) {
-                            expected_end_ptr--; 
-                            
-                            if (stack_ptr <= 1) {
-                                fprintf(stderr, "Unexpected end block\n");
-                                exit(1);
-                            }
-                            ASTNode* prev_block = stack[--stack_ptr];  
-                            ASTNode* parent = stack[stack_ptr-1];
-                            parent->children[parent->child_count++] = prev_block;
-                        }
-                        break;
-                    default:
-                        break;
-                }                
                 continue;
 
+            case TOKEN_ENDINIT:
+            case TOKEN_ENDUPDATE:
+            case TOKEN_ENDCONDITION:
             case TOKEN_ENDIF:
             case TOKEN_ENDWHILE:
             case TOKEN_ENDFOR:
@@ -182,15 +164,17 @@ ASTNode* parse(Token* tokens, int token_count) {
                 ASTNode* parent = stack[stack_ptr-1];
                 parent->children[parent->child_count++] = block;
 
-              node = create_node(
+                node = create_node(
                     (tokens[i].type == TOKEN_ENDIF) ? NODE_ENDIF :
                     (tokens[i].type == TOKEN_ENDWHILE) ? NODE_ENDWHILE :
                     (tokens[i].type == TOKEN_ENDFOR) ? NODE_ENDFOR :
                     (tokens[i].type == TOKEN_ENDFUNCTION) ? NODE_ENDFUNCTION :
+                    (tokens[i].type == TOKEN_ENDINIT) ? NODE_ENDINIT :
+                    (tokens[i].type == TOKEN_ENDUPDATE) ? NODE_ENDUPDATE :
+                    (tokens[i].type == TOKEN_ENDCONDITION) ? NODE_ENDCONDITION :
                     NODE_ENDSTATEMENTS, 0
-              );
-
-              break;
+                );
+                break;
             }
 
             case TOKEN_STORE:

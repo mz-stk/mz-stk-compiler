@@ -1,3 +1,6 @@
+# Arithmetic Operation Rules:
+# Operations are handled in the order they are added to the stack 
+
 S
 5 3 + V  
 E

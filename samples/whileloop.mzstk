@@ -1,0 +1,17 @@
+# While Loop Rules:
+# - Multiple C/L blocks allowed
+# - Always executes ALL C blocks first, then ALL L blocks if conditions pass
+# - Repeats from first C after each iteration
+
+S
+5 :0     # Store 5 in variable 0
+{        # While loop start
+  C      # Condition start
+    ;0 0 >  # Actual condition (var0 > 0)
+  c      # Condition end
+  L       # Statements start
+    ;0 V    # Print var0
+    ;0 1 - :0  # Decrement var0
+  l       # Statements end
+}        # While loop end
+E

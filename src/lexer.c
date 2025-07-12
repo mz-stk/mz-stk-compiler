@@ -122,10 +122,13 @@ Token* lex(const char* input, int* token_count) {
             case ')': token.type = TOKEN_ENDFOR; break;
 
             case 'I': token.type = TOKEN_INIT; break;
+            case 'i': token.type = TOKEN_ENDINIT; break;
             case 'C': token.type = TOKEN_CONDITION; break;
+            case 'c': token.type = TOKEN_ENDCONDITION; break;
             case 'U': token.type = TOKEN_UPDATE; break;
-            case 'L': token.type = TOKEN_STATEMENTS; break; 
-            case 'X': token.type = TOKEN_ENDSTATEMENTS; break;
+            case 'u': token.type = TOKEN_ENDUPDATE; break;
+            case 'L': token.type = TOKEN_STATEMENTS; break;
+            case 'l': token.type = TOKEN_ENDSTATEMENTS; break;
 
             case '@': 
                 if (i + 1 >= input_len || !isdigit(input[i + 1])) {
@@ -190,5 +193,10 @@ Token* lex(const char* input, int* token_count) {
 
     Token eof_token = {TOKEN_EOF, 0};
     tokens[(*token_count)++] = eof_token;
+    
+    for (int i = 0; i < *token_count; i++) {
+        printf("Token %d: type=%d, value=%d\n", i, tokens[i].type, tokens[i].value);
+    }
+
     return tokens;
 }

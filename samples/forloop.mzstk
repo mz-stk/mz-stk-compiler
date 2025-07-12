@@ -1,3 +1,8 @@
+# For Loop Rules:
+# - Multiple I/C/U/L blocks allowed  
+# - Fixed execution order: I → C → L → U (repeat)
+# - All blocks execute sequentially within their phase
+
 S               # Start program
 (               # Begin for loop
   I             # Init block start
@@ -6,11 +11,11 @@ S               # Start program
   C             # Condition block start
     ;0 5 <      # while var0 < 5
   c             # Condition block end
-  L             # Statements block start
-    ;0 V        # Print var0
-  l             # Statements block end
   U             # Update block start
     ;0 1 + :0   # var0 += 1
   u             # Update block end
+  L             # Statements block start
+    ;0 V        # Print var0
+  l             # Statements block end
 )               # End for loop
 E               # End program

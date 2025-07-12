@@ -128,38 +128,90 @@ void compile(ASTNode* node, FILE* output, int indent) {
         }
 
         case NODE_STARTWHILE: {
+            ASTNode *condition_block = NULL;
+            ASTNode *statements_block = NULL;
+            
+            for (int i = 0; i < node->child_count; i++) {
+                switch (node->children[i]->type) {
+                    case NODE_CONDITION: 
+                        condition_block = node->children[i]; 
+                        break;
+                    case NODE_STATEMENTS: 
+                        statements_block = node->children[i]; 
+                        break;
+                    default: 
+                        break;
+                }
+            }
+            
             INDENT; emit(output, "while (1) {");
             
-            compile(node->children[0], output, indent+1);
+            if (condition_block) {
+                for (int i = 0; i < condition_block->child_count; i++) {
+                    compile(condition_block->children[i], output, indent+1);
+                }
+                INDENT; emit(output, "    if (!stack[sp--]) break;");
+            }
             
-            INDENT; emit(output, "    if (!stack[sp--]) break;");
+            if (statements_block) {
+                for (int i = 0; i < statements_block->child_count; i++) {
+                    compile(statements_block->children[i], output, indent+1);
+                }
+            }
             
-            for (int i = 1; i < node->child_count; i++) {
-                compile(node->children[i], output, indent+1);
+            for (int i = 0; i < node->child_count; i++) {
+                if (node->children[i]->type != NODE_CONDITION && 
+                    node->children[i]->type != NODE_STATEMENTS) {
+                    compile(node->children[i], output, indent+1);
+                }
             }
             
             INDENT; emit(output, "}");
             break;
         }
 
+
         case NODE_STARTFOR: {
-            if (node->child_count > 0) {
-                compile(node->children[0], output, indent);
+            ASTNode *init_block = NULL;
+            ASTNode *cond_block = NULL;
+            ASTNode *update_block = NULL;
+            ASTNode *statements_block = NULL;
+            
+            for (int i = 0; i < node->child_count; i++) {
+                switch (node->children[i]->type) {
+                    case NODE_INIT: init_block = node->children[i]; break;
+                    case NODE_CONDITION: cond_block = node->children[i]; break;
+                    case NODE_UPDATE: update_block = node->children[i]; break;
+                    case NODE_STATEMENTS: statements_block = node->children[i]; break;
+                    default: break;
+                }
+            }
+            
+            if (init_block) {
+                for (int i = 0; i < init_block->child_count; i++) {
+                    compile(init_block->children[i], output, indent);
+                }
             }
             
             INDENT; emit(output, "while (1) {");
             
-            if (node->child_count > 2) {
-                compile(node->children[2], output, indent+1);
+            if (cond_block) {
+                for (int i = 0; i < cond_block->child_count; i++) {
+                    compile(cond_block->children[i], output, indent+1);
+                }
                 INDENT; emit(output, "    if (!stack[sp--]) break;");
             }
             
-            if (node->child_count > 3) {
-                compile(node->children[3], output, indent+1);
+            if (statements_block) {
+                for (int i = 0; i < statements_block->child_count; i++) {
+                    compile(statements_block->children[i], output, indent+1);
+                }
             }
             
-            if (node->child_count > 1) {
-                compile(node->children[1], output, indent+1);
+            if (update_block) {
+                for (int i = 0; i < update_block->child_count; i++) {
+                    compile(update_block->children[i], output, indent+1);
+                }
             }
             
             INDENT; emit(output, "}");
@@ -179,6 +231,9 @@ void compile(ASTNode* node, FILE* output, int indent) {
         case NODE_ENDWHILE:
         case NODE_ENDFOR:
         case NODE_ENDFUNCTION:
+        case NODE_ENDINIT:
+        case NODE_ENDUPDATE:
+        case NODE_ENDCONDITION:
         case NODE_ENDSTATEMENTS:
             break;
 
@@ -284,7 +339,7 @@ void compile(ASTNode* node, FILE* output, int indent) {
 
 void execute(ASTNode* ast_root, FILE* output) {
     if (!output) {
-        fprintf(stderr, "Invalid file pointer in execute()\n");
+        fprintf(stderr, "invalid file pointer in execute()\n");
         return;
     }
     
