@@ -1,0 +1,167 @@
+:root {
+    --primary-color: #4361ee;
+    --primary-hover: #3a56d4;
+    --secondary-color: #f8f9fa;
+    --text-color: #2b2d42;
+    --light-text: #6c757d;
+    --editor-bg: #1e1e1e;
+    --editor-text: #d4d4d4;
+    --output-bg: #ffffff;
+    --border-color: #dee2e6;
+    --border-radius: 8px;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f8f9fa;
+    color: var(--text-color);
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+h1 {
+    text-align: center;
+    color: var(--primary-color);
+    margin-bottom: 2rem;
+    font-weight: 600;
+    font-size: 2.5rem;
+}
+
+.editor-area {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.editor-container, .output-container {
+    flex: 1;
+    min-width: 300px;
+    background: var(--secondary-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 4.0rem;
+    box-shadow: var(--shadow);
+    transition: all 0.3s ease;
+}
+
+.editor-container:hover, .output-container:hover {
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.editor-container h2, .output-container h2 {
+    margin: 0 0 1rem;
+    color: var(--primary-color);
+    font-weight: 500;
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+}
+
+.editor-container h2::before, .output-container h2::before {
+    content: "";
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    margin-right: 0.75rem;
+}
+
+#code-editor {
+    width: 100%;
+    height: 500px;
+    font-family: 'Fira Code', 'Courier New', Courier, monospace;
+    font-size: 15px;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    resize: none;
+    background-color: var(--editor-bg);
+    color: var(--editor-text);
+    line-height: 1.5;
+    tab-size: 4;
+}
+
+#code-editor:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
+}
+
+#output {
+    min-height: 500px;
+    background: var(--output-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    font-family: 'Fira Code', 'Courier New', Courier, monospace;
+    font-size: 15px;
+    white-space: pre-wrap;
+    overflow-y: auto;
+    line-height: 1.5;
+}
+
+.controls {
+    text-align: center;
+    margin-top: 2rem;
+}
+
+button {
+    padding: 0.75rem 1.75rem;
+    margin: 0 0.75rem;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow);
+}
+
+button:hover {
+    background: var(--primary-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+button#clear-btn {
+    background: #6c757d;
+}
+
+button#clear-btn:hover {
+    background: #5a6268;
+}
+
+@media (max-width: 768px) {
+    .editor-area {
+        flex-direction: column;
+    }
+    
+    .container {
+        padding: 1rem;
+    }
+    
+    h1 {
+        font-size: 2rem;
+    }
+    
+    #code-editor, #output {
+        height: 300px;
+        min-height: 300px;
+    }
+}
