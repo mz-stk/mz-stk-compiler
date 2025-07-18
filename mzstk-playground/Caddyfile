@@ -1,0 +1,8 @@
+{
+    admin unix//home/arungeorgesaji/caddy-admin.sock
+}
+
+http://arungeorgesaji.hackclub.app {
+    bind unix/.arungeorgesaji.hackclub.app.webserver.sock|777
+    reverse_proxy :3000
+}

@@ -5,10 +5,33 @@ const path = require('path');
 const app = express();
 const port = 3000;
 
+let isHealthy = true;
+
+app.get('/health', (req, res) => {
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'healthy' : 'unhealthy',
+    timestamp: new Date().toISOString(),
+    service: 'mzstk-compiler'
+  });
+});
+
+exec('docker --version', (err) => {
+  if (err) {
+    console.error('Docker check failed:', err);
+    isHealthy = false;
+    process.exit(1);
+  }
+  console.log('Docker available');
+});
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
 app.post('/run', async (req, res) => {
+    if (!isHealthy) {
+        return res.status(503).json({ error: 'Service unavailable' });
+    }
+
     const { code } = req.body;
     if (!code) {
         return res.status(400).json({ error: 'No code provided' });
@@ -73,4 +96,23 @@ app.post('/run', async (req, res) => {
 
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
+});
+
+let isReady = false;
+let lastHealthCheck = new Date();
+
+app.get('/health', (req, res) => {
+  const status = {
+    status: isReady ? 'healthy' : 'starting',
+    uptime: process.uptime(),
+    timestamp: new Date(),
+    lastHealthCheck,
+    system: {
+      memory: process.memoryUsage(),
+      cpu: process.cpuUsage(),
+      env: process.env.NODE_ENV || 'development'
+    }
+  };
+
+  res.status(isReady ? 200 : 503).json(status);
 });
