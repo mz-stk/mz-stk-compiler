@@ -168,11 +168,18 @@ make uninstall # Remove installation
 
 ## Playground
 
-An online playground is in development where you can:
-- Write mz-stk code directly in your browser
-- Run programs instantly without installation
-- Share code snippets with others
+Try mz-stk online right in your browser with our interactive playground!
 
-*Link coming soon!*
+🔗 [Open Online Playground](https://mzstk.arungeorgesaji.hackclub.app)
+
+Features:
+- Write and edit mz-stk code directly in your browser
+- Run programs instantly without any installation
+- Share code snippets with others
+- See compilation and execution output side-by-side
+
+**Note about input**: The `^` operator (get input from user) is currently not supported in the playground environment due to technical limitations of running in a browser sandbox. For programs that require user input, you'll need to:
+1. Download and run them locally, or
+2. Pre-define your input values in the code
 
 *mz-stk - Stack-based programming made simple*
