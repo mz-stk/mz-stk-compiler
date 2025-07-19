@@ -2,8 +2,26 @@ const express = require('express');
 const { exec } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
+const net = require('net');
 const app = express();
-const port = 3000;
+
+const getAvailablePort = (startPort = 3000) => {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.on('error', () => resolve(getAvailablePort(startPort + 1)));
+    server.listen(startPort, () => {
+      server.close(() => resolve(startPort));
+    });
+  });
+};
+
+(async () => {
+  const port = await getAvailablePort();
+  app.listen(port, () => {
+    console.log(`Server running on port http://localhost:${port}`);
+  });
+})();
 
 let isHealthy = true;
 
@@ -92,10 +110,6 @@ app.post('/run', async (req, res) => {
         }
         res.status(500).json({ error: err.message });
     }
-});
-
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
 });
 
 let isReady = false;
