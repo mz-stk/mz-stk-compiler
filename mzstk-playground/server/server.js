@@ -98,7 +98,9 @@ app.post('/run', async (req, res) => {
             
             if (executionOutput.trim()) {
                 output += '\n\n=== EXECUTION OUTPUT ===\n' + executionOutput.trim();
-            }
+            } else {
+                output += '\n\n=== EXECUTION OUTPUT ===\nNo output generated.';
+            }  
             
             res.json({ output, error: stderr });
         });
