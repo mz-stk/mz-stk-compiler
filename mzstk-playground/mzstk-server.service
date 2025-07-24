@@ -1,0 +1,11 @@
+[Unit]
+Description=MZSTK Node.js Server
+After=network.target
+
+[Service]
+WorkingDirectory=%h/mz-stk-compiler/mzstk-playground/server 
+ExecStart=node server.js 
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
