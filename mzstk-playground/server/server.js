@@ -5,7 +5,9 @@ const path = require('path');
 const net = require('net');
 const app = express();
 
-const getAvailablePort = (startPort = 3000) => {
+/* Automatic port finding (I think this is causing a bit of issues when nest goes down)
+
+const getAvailablePort = (startPort = 60001) => {
   return new Promise((resolve) => {
     const server = net.createServer();
     server.unref();
@@ -22,6 +24,12 @@ const getAvailablePort = (startPort = 3000) => {
     console.log(`Server running on port http://localhost:${port}`);
   });
 })();
+*/ 
+
+const PORT = 29510;
+app.listen(PORT, () => {
+  console.log(`Server running on port http://localhost:${PORT}`);
+});
 
 let isHealthy = true;
 
