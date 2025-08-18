@@ -165,3 +165,19 @@ button#clear-btn:hover {
         min-height: 300px;
     }
 }
+
+.notice {
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+    padding: 12px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+    font-size: 14px;
+}
+.notice a {
+    color: #0056b3;
+    text-decoration: underline;
+}
+.notice strong {
+    color: #856404;
+}

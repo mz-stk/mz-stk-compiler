@@ -1,5 +1,5 @@
 # Remember mz-stk only supports numbers
 
 S
-^ V # Input only accepts numbers 
+^ V # Input only accepts numbers(Note: Input doesnt work in playground website) 
 E
